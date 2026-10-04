@@ -1,5 +1,5 @@
 import { chunk } from "@/lib/db";
-import { generateJson } from "@/lib/gemini";
+import { generate, generateJson } from "@/lib/llm";
 import type { Job, Settings } from "@/lib/types";
 import { truncate } from "./text";
 
@@ -64,6 +64,7 @@ Drop postings in clearly unrelated functions.
 
 ${listing}`,
       TRIAGE_SCHEMA,
+      "light",
     );
     for (const i of res.keep ?? []) if (Number.isInteger(i) && i >= 0 && i < batch.length) keep.add(offset + i);
     offset += batch.length;
@@ -102,13 +103,16 @@ const SCORE_SCHEMA = {
   required: ["results"],
 };
 
-export const SCORE_BATCH = 4;
+export const SCORE_BATCH = 5;
 
-/** Scores up to SCORE_BATCH postings against the resume. Result i corresponds to jobs[i]; missing entries are null. */
+/**
+ * Scores up to SCORE_BATCH postings against the resume. fits[i] corresponds to jobs[i]; missing
+ * entries are null. `model` is which model did the scoring.
+ */
 export async function scoreJobs(
   jobs: Pick<Job, "title" | "location" | "department" | "description">[],
   c: Criteria,
-): Promise<(Fit | null)[]> {
+): Promise<{ fits: (Fit | null)[]; model: string }> {
   const postings = jobs
     .map(
       (j, i) => `### Posting ${i}
@@ -119,7 +123,7 @@ ${j.description ? truncate(j.description, 3500) : "(No description available; ju
     )
     .join("\n\n");
 
-  const res = await generateJson<{ results: (Fit & { i: number })[] }>(
+  const { data: res, model } = await generate<{ results: (Fit & { i: number })[] }>(
     `Score how well each job posting fits this candidate.
 
 ## Candidate
@@ -142,15 +146,21 @@ ${postings}`,
   );
 
   const out: (Fit | null)[] = jobs.map(() => null);
-  for (const r of res.results ?? []) {
-    if (!Number.isInteger(r.i) || r.i < 0 || r.i >= jobs.length) continue;
+  const results = res.results ?? [];
+  // Small local models sometimes drop or renumber the index; a full-length reply is still in order.
+  const indices = results.map((r) => r.i);
+  const trustIndex = indices.every((i) => Number.isInteger(i) && i >= 0 && i < jobs.length) && new Set(indices).size === indices.length;
+  if (!trustIndex && results.length === jobs.length) results.forEach((r, i) => (r.i = i));
+  for (const r of results) {
+    if (!Number.isInteger(r.i) || r.i < 0 || r.i >= jobs.length || !Number.isFinite(r.score)) continue;
     out[r.i] = {
       score: Math.max(0, Math.min(100, Math.round(r.score))),
-      reason: r.reason.trim(),
-      matched_skills: (r.matched_skills ?? []).slice(0, 5),
-      gaps: (r.gaps ?? []).slice(0, 5),
+      reason: (r.reason ?? "").trim(),
+      matched_skills: (r.matched_skills ?? []).filter((x) => x?.trim()).slice(0, 5),
+      gaps: (r.gaps ?? []).filter((x) => x?.trim()).slice(0, 5),
       posted_pay: r.posted_pay?.trim() || null,
     };
   }
-  return out;
+  if (out.every((f) => f === null)) console.warn(`  ${model} returned no usable scores for ${jobs.length} roles; they stay queued`);
+  return { fits: out, model };
 }

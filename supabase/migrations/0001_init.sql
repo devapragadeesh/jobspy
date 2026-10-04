@@ -57,6 +57,7 @@ create table public.jobs (
   matched_skills text[] not null default '{}',
   gaps text[] not null default '{}',
   salary jsonb,
+  scored_by text,
   status text not null default 'new'
     check (status in ('new', 'saved', 'applied', 'interviewing', 'rejected', 'dismissed')),
   notified_at timestamptz,
@@ -76,7 +77,14 @@ create table public.scan_runs (
   error text
 );
 
+-- A Gemini model that reported its quota exhausted is not asked again before this time.
+create table public.llm_state (
+  model text primary key,
+  exhausted_until timestamptz not null
+);
+
 alter table public.settings enable row level security;
+alter table public.llm_state enable row level security;
 alter table public.companies enable row level security;
 alter table public.jobs enable row level security;
 alter table public.scan_runs enable row level security;

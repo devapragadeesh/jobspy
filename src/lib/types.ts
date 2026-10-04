@@ -107,6 +107,8 @@ export interface Job {
   matched_skills: string[];
   gaps: string[];
   salary: SalaryEstimate | null;
+  /** Which model produced the fit score, e.g. "gemini-3.8-flash" or "ollama:qwen2.5:7b". */
+  scored_by: string | null;
   status: JobStatus;
   notified_at: string | null;
 }

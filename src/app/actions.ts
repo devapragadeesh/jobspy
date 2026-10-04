@@ -7,6 +7,7 @@ import { detectAtsFromUrl, guessCompanyName, parseCareersUrl } from "@/lib/ats";
 import { createSession, passwordMatches, SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { scanTriggerConfigured, triggerScan } from "@/lib/github";
+import { QuotaError } from "@/lib/llm";
 import { profileFromText, readResumePdf } from "@/lib/resume";
 import { requireSession } from "@/lib/session";
 import { JOB_STATUSES, type JobStatus, type ResumeProfile, type Settings } from "@/lib/types";
@@ -150,6 +151,13 @@ export async function saveSettings(_prev: FormState, form: FormData): Promise<Fo
       Object.assign(patch, { resume_filename: file.name, resume_text: text, resume_profile: profile });
       resumeChanged = true;
     } catch (err) {
+      if (err instanceof QuotaError) {
+        return {
+          error: isPdf
+            ? "Gemini's free quota is used up for today, and it's needed to read PDFs. Upload the resume as a .txt file, or try again tomorrow."
+            : "Gemini's free quota is used up for today. Try again tomorrow.",
+        };
+      }
       return { error: `Couldn't read the resume: ${(err as Error).message}` };
     }
   } else if (form.get("remove_resume") === "on" && current.resume_text) {

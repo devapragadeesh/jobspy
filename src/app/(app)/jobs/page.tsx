@@ -88,6 +88,11 @@ export default async function JobsPage({
                   {j.fit_score != null && (
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${scoreClass(j.fit_score)}`}>{j.fit_score}% fit</span>
                   )}
+                  {j.scored_by?.startsWith("ollama:") && (
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-mute" title={`Scored by ${j.scored_by}`}>
+                      local model
+                    </span>
+                  )}
                   {j.closed_at && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-mute">closed</span>}
                 </div>
                 <div className="text-xs text-mute">

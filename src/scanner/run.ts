@@ -2,7 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { guessCompanyName, parseCareersUrl } from "@/lib/ats";
 import { chunk, db, fetchAll } from "@/lib/db";
-import { geminiCallCount, QuotaError } from "@/lib/gemini";
+import { configureLlm, llmCallCount, QuotaError } from "@/lib/llm";
+import { rememberQuotaInDatabase } from "@/lib/llm-store";
 import { TRACKED_STATUSES, type Company, type Job, type Settings } from "@/lib/types";
 import { diffJobs, type StoredJobRef } from "./diff";
 import { describe, discover } from "./discover";
@@ -10,7 +11,8 @@ import { closeBrowser, type KnownJob } from "./discover/generic";
 import { digestIsEmpty, renderDigest, sendDigest, type Digest, type DigestGroup } from "./email";
 import { ALERT_AFTER_FAILURES, nextHealth, type HealthUpdate } from "./health";
 import { hasCriteria, passesHardFilters, SCORE_BATCH, scoreJobs, triageTitles } from "./match";
-import { estimateSalary, researchCompany, researchIsStale } from "./research";
+import { estimateSalaries, researchCompany, researchIsStale } from "./research";
+import { searchConfigured } from "./search";
 import { truncate } from "./text";
 
 const TRIAGE_LIMIT = 3000;
@@ -25,11 +27,13 @@ const { values: args } = parseArgs({
     force: { type: "boolean", default: false },
     company: { type: "string" },
     url: { type: "string" },
+    llm: { type: "string" },
   },
 });
 const dryRun = args["dry-run"];
 const force = args.force || process.env.FORCE === "true";
 const onlyCompany = args.company || process.env.COMPANY_ID || undefined;
+if (args.llm === "ollama" || args.llm === "gemini") configureLlm({ provider: args.llm });
 
 const log = (msg: string) => console.log(msg);
 const healthFields = ({ last_scan_status, last_scan_error, consecutive_failures }: HealthUpdate) => ({
@@ -61,7 +65,7 @@ interface Stats {
   triaged: number;
   scored: number;
   notified: number;
-  gemini_calls: number;
+  llm_calls: number;
 }
 
 async function scanCompany(company: Company, stats: Stats): Promise<void> {
@@ -219,7 +223,7 @@ async function score(settings: Settings, companies: Map<string, Company>, stats:
         must(await db().from("jobs").update({ description: job.description }).eq("id", job.id));
       }
     }
-    const fits = await scoreJobs(batch, settings);
+    const { fits, model } = await scoreJobs(batch, settings);
     for (const [i, fit] of fits.entries()) {
       if (!fit) continue;
       const job = batch[i];
@@ -228,6 +232,7 @@ async function score(settings: Settings, companies: Map<string, Company>, stats:
         fit_reason: fit.reason,
         matched_skills: fit.matched_skills,
         gaps: fit.gaps,
+        scored_by: model,
       };
       if (!job.salary && fit.posted_pay) {
         patch.salary = { text: fit.posted_pay, basis: "posting", confidence: "high", sources: [] };
@@ -285,15 +290,21 @@ async function buildDigest(
     }
     let budget = SALARY_LIMIT;
     for (const g of groups) {
-      for (const job of g.jobs) {
-        if (job.salary || budget-- <= 0) continue;
-        job.salary = await estimateSalary(g.company, job);
-        must(await db().from("jobs").update({ salary: job.salary }).eq("id", job.id));
+      const unpriced = g.jobs.filter((j) => !j.salary).slice(0, Math.max(0, budget));
+      if (!unpriced.length) continue;
+      budget -= unpriced.length;
+      // One model call per company covers all of its new roles.
+      const estimates = await estimateSalaries(g.company, unpriced);
+      for (const job of unpriced) {
+        const salary = estimates.get(job.id);
+        if (!salary) continue;
+        job.salary = salary;
+        must(await db().from("jobs").update({ salary }).eq("id", job.id));
       }
     }
   } catch (err) {
     if (!(err instanceof QuotaError)) throw err;
-    notes.push("Some company briefs or pay estimates are missing: today's Gemini quota ran out. They fill in on the next scan.");
+    notes.push("Some company briefs or pay estimates are missing: today's free model quota ran out. They fill in on the next scan.");
   }
 
   const closedJobs = must(
@@ -340,6 +351,7 @@ async function markSent(digest: Digest, notifyIds: string[]): Promise<void> {
 
 async function main(): Promise<void> {
   if (args.url) return probe(args.url);
+  rememberQuotaInDatabase();
 
   const settings = must(await db().from("settings").select("*").eq("id", 1).single()) as Settings;
   const all = must(await db().from("companies").select("*").eq("active", true).order("created_at")) as Company[];
@@ -362,7 +374,7 @@ async function main(): Promise<void> {
     triaged: 0,
     scored: 0,
     notified: 0,
-    gemini_calls: 0,
+    llm_calls: 0,
   };
   const notes: string[] = [];
   let emailSent = false;
@@ -371,6 +383,7 @@ async function main(): Promise<void> {
   try {
     log(`Scanning ${due.length} of ${all.length} companies${dryRun ? " (dry run: no email)" : ""}`);
     if (!hasCriteria(settings)) log("No resume or target roles set: every new role will be reported unscored.");
+    if (!searchConfigured()) log("SEARXNG_URL is not set: company briefs and pay estimates will be unverified.");
 
     try {
       for (const company of due) await scanCompany(company, stats);
@@ -379,7 +392,7 @@ async function main(): Promise<void> {
     } catch (err) {
       if (!(err instanceof QuotaError)) throw err;
       log(`  quota: ${err.message}`);
-      notes.push("Today's Gemini quota ran out part-way through; remaining roles are queued for the next scan.");
+      notes.push("Today's free model quota ran out part-way through; remaining roles are queued for the next scan.");
     }
 
     const { digest, notifyIds } = await buildDigest(settings, companies, notes);
@@ -406,7 +419,7 @@ async function main(): Promise<void> {
     failure = (err as Error).stack ?? String(err);
     throw err;
   } finally {
-    stats.gemini_calls = geminiCallCount();
+    stats.llm_calls = llmCallCount();
     await closeBrowser();
     await db()
       .from("scan_runs")

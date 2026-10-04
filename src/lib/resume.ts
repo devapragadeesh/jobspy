@@ -1,5 +1,8 @@
-import { generateJson, readPdfJson } from "./gemini";
+import { generateJson, readPdfJson } from "./llm";
+import { rememberQuotaInDatabase } from "./llm-store";
 import type { ResumeProfile } from "./types";
+
+rememberQuotaInDatabase();
 
 const PROFILE_PROPS = {
   headline: { type: "string", description: "one line, e.g. 'Backend engineer, 6 yrs, payments and distributed systems'" },

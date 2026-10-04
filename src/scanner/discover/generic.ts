@@ -1,5 +1,5 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
-import { generateJson } from "@/lib/gemini";
+import { generateJson } from "@/lib/llm";
 import { chunk } from "@/lib/db";
 import type { DiscoveredJob } from "@/lib/types";
 import { normalizeUrl } from "@/lib/ats";
@@ -207,6 +207,7 @@ Use the link text and context for the title, location and department; omit a fie
 
 ${listing}`,
       LINK_SCHEMA,
+      "light",
     );
     for (const found of res.jobs ?? []) {
       const link = batch[found.i];
@@ -252,6 +253,7 @@ if the text shows no specific openings, return an empty list.
 
 ${truncate(text, 60_000)}`,
     TEXT_SCHEMA,
+    "light",
   );
   const jobs = new Map<string, DiscoveredJob>();
   for (const j of res.jobs ?? []) {

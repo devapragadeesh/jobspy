@@ -29,6 +29,9 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
+      # Open-source metasearch, used for company and pay research. Reachable only inside this job.
+      - name: Start web search
+        run: docker run -d --name searxng -p 8888:8080 -v "$PWD/searxng/settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -47,7 +50,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          SEARXNG_URL: http://localhost:8888
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           APP_URL: ${{ vars.APP_URL }}

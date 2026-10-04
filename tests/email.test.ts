@@ -50,6 +50,7 @@ const job = (over: Partial<Job> = {}): Job => ({
   matched_skills: ["Spark"],
   gaps: ["Kafka"],
   salary: { text: "₹30–40 LPA", basis: "research", confidence: "medium", sources: [] },
+  scored_by: "gemini-3.8-flash",
   status: "new",
   notified_at: null,
   ...over,
