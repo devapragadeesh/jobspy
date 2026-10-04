@@ -1,0 +1,14 @@
+name: searxng-probe
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker run -d --name searxng -p 8888:8080 -v "$PWD/searxng/settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
+      - run: ./searxng/probe.sh
+      - if: always()
+        run: docker logs searxng 2>&1 | tail -40

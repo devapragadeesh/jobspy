@@ -1,0 +1,38 @@
+# SearXNG runs next to the scanner (a container inside the GitHub Actions job, or Docker on your
+# machine) and is only reachable on localhost. It gives the scanner web search without an API key.
+use_default_settings: true
+
+server:
+  secret_key: "not-secret-localhost-only"
+  limiter: false
+  image_proxy: false
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
+
+engines:
+  - name: google
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: yahoo
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: brave
+    disabled: false
+  - name: startpage
+    disabled: false
+    inactive: false
+  - name: mojeek
+    disabled: false
+    inactive: false
+  - name: qwant
+    disabled: false
+  - name: wikipedia
+    disabled: false
+  - name: wikidata
+    disabled: false
