@@ -13,26 +13,27 @@ search:
     - html
     - json
 
+# Chosen by measurement from GitHub Actions runners (searxng/probe.sh): Bing, Yahoo and Startpage
+# answer from datacenter addresses; Google, DuckDuckGo, Brave, Mojeek and Qwant refuse them.
 engines:
-  - name: google
-    disabled: false
   - name: bing
     disabled: false
   - name: yahoo
     disabled: false
-  - name: duckduckgo
-    disabled: false
-  - name: brave
-    disabled: false
   - name: startpage
     disabled: false
     inactive: false
-  - name: mojeek
-    disabled: false
-    inactive: false
-  - name: qwant
-    disabled: false
   - name: wikipedia
     disabled: false
   - name: wikidata
     disabled: false
+  - name: google
+    disabled: true
+  - name: duckduckgo
+    disabled: true
+  - name: brave
+    disabled: true
+  - name: mojeek
+    disabled: true
+  - name: qwant
+    disabled: true
