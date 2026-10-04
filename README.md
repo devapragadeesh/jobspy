@@ -46,7 +46,7 @@ Copy `.env.example` to `.env.local` for local runs. The same values go into GitH
 | `GITHUB_DISPATCH_TOKEN` | | ✓ | Fine-grained token, this repo only, Actions: read and write |
 | `GITHUB_REPO` | | ✓ | `owner/repo` |
 | `APP_URL` | variable | | The Vercel URL, for the "Open the tracker" link in emails |
-| `GEMINI_MODEL` | variable (optional) | optional | Defaults to `gemini-3.8-flash` |
+| `GEMINI_MODEL` | variable (optional) | optional | Comma-separated, tried in order when one is overloaded or out of quota. Defaults to `gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite` |
 
 ### 2. Database
 

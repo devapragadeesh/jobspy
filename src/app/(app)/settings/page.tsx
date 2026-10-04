@@ -3,8 +3,8 @@ import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import type { Settings } from "@/lib/types";
 
-// Reading a resume PDF with the model can take a while.
-export const maxDuration = 60;
+// Reading a resume PDF with the model can take a while, more so when the first models tried are overloaded.
+export const maxDuration = 300;
 
 export default async function SettingsPage() {
   await requireSession();
